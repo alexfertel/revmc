@@ -1,32 +1,59 @@
+use alloy::primitives::U256;
+use eyre::{bail, Result};
 use revm::{
     db::{CacheDB, EmptyDB},
-    primitives::{address, hex, AccountInfo, Bytecode, TransactTo, U256},
+    primitives::{address, ExecutionResult, Output, TransactTo},
 };
-use revmc_examples_runner::build_evm;
 
-include!("./common.rs");
+use revmc_examples_runner::{build_evm, spoof_storage, CALLDATA, UNISWAP_V2_ROUTER};
 
-fn main() {
-    let num =
-        std::env::args().nth(1).map(|s| s.parse().unwrap()).unwrap_or_else(|| U256::from(100));
-    // The bytecode runs fib(input + 1), so we need to subtract 1.
-    let actual_num = num.saturating_sub(U256::from(1));
+// const ENDPOINT: Option<&str> = option_env!("RPC_URL");
+
+fn main() -> Result<()> {
+    // let Some(endpoint) = ENDPOINT else {
+    //     return Ok(());
+    // };
+    //
+    // let provider = get_http_provider(endpoint);
+    // let meta = BlockchainDbMeta {
+    //     cfg_env: Default::default(),
+    //     block_env: Default::default(),
+    //     hosts: BTreeSet::from([endpoint.to_string()]),
+    // };
+    //
+    // let backend = SharedBackend::spawn_backend_thread(
+    //     Arc::new(provider),
+    //     BlockchainDb::new(meta, None),
+    //     Some(BlockNumberOrTag::Latest.into()),
+    // );
 
     let db = CacheDB::new(EmptyDB::new());
     let mut evm = build_evm(db);
-    let fibonacci_address = address!("0000000000000000000000000000000000001234");
-    evm.db_mut().insert_account_info(
-        fibonacci_address,
-        AccountInfo {
-            code_hash: FIBONACCI_HASH.into(),
-            code: Some(Bytecode::new_raw(FIBONACCI_CODE.into())),
-            ..Default::default()
-        },
-    );
-    evm.context.evm.env.tx.transact_to = TransactTo::Call(fibonacci_address);
-    evm.context.evm.env.tx.data = actual_num.to_be_bytes_vec().into();
-    let result = evm.transact().unwrap();
-    // eprintln!("{:#?}", result.result);
 
-    println!("fib({num}) = {}", U256::from_be_slice(result.result.output().unwrap()));
+    spoof_storage(evm.db_mut())?;
+
+    let tx = evm.tx_mut();
+
+    tx.caller = address!("5555555555555555555555555555555555555555");
+    tx.transact_to = TransactTo::Call(UNISWAP_V2_ROUTER);
+    tx.data = CALLDATA.clone();
+    tx.value = U256::ZERO;
+
+    let result = match evm.transact_commit() {
+        Ok(result) => result,
+        Err(e) => bail!("{e}"),
+    };
+
+    let output = match result {
+        ExecutionResult::Success { output, .. } => match output {
+            Output::Call(o) => o,
+            Output::Create(o, _) => o,
+        },
+        ExecutionResult::Revert { output, .. } => return Err(eyre::eyre!("Revert: {:?}", output)),
+        ExecutionResult::Halt { reason, .. } => return Err(eyre::eyre!("Halt: {:?}", reason)),
+    };
+
+    println!("{:?}", output);
+
+    Ok(())
 }

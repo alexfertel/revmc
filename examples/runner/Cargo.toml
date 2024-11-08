@@ -13,12 +13,43 @@ repository.workspace = true
 exclude.workspace = true
 
 [build-dependencies]
+alloy = { version = "0.6", features = [
+  "contract",
+  "network",
+  "providers",
+  "provider-ipc",
+  "json-rpc",
+  "signer-local",
+  "rpc-client",
+  "rpc-client-ipc",
+  "rpc-types-eth",
+  "rpc-types-trace",
+] }
 revmc = { workspace = true, features = ["llvm-prefer-dynamic"] }
 revmc-build.workspace = true
 cc = "1.0"
 
 [dependencies]
+revm = { workspace = true, default-features = false }
 revmc-builtins = { workspace = true, default-features = false }
 revmc-context = { workspace = true, default-features = false }
+alloy = { version = "0.6", features = [
+  "contract",
+  "network",
+  "providers",
+  "provider-ipc",
+  "json-rpc",
+  "signer-local",
+  "rpc-client",
+  "rpc-client-ipc",
+  "rpc-types-eth",
+  "rpc-types-trace",
+] }
+eyre.workspace = true
 
-revm = { workspace = true, default-features = false }
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "uni_v2"
+harness = false
